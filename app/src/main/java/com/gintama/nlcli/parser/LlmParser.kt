@@ -63,34 +63,54 @@ class LlmParser(
     }
 
     private fun buildWhatsAppJson(input: String): String? {
-        val regex = Regex("""(?i)(?:tell|message|msg|ping|send)\s+([a-zA-Z0-9\s]+?)\s+(?:on|via)\s+whatsapp\s+(?:that|saying)?\s*[:\-]?\s*(.+)""")
+        val regex = Regex("""(?i)(?:tell|message|msg|ping|send)\s+(.+?)\s+(?:via|on)?\s*whatsapp\s*(?:that|saying)?\s*[:\-]?\s*(.+)""")
         val match = regex.find(input)
         return if (match != null) {
             val (contact, message) = match.destructured
-            """{"app":"whatsapp","action":"send_message","contact":"${contact.trim()}","message":"${message.trim()}"}"""
+            val cleanContact = contact.replace(Regex("""(?i)\s+(?:via|on)$"""), "").trim()
+            JSONObject().apply {
+                put("app", "whatsapp")
+                put("action", "send_message")
+                put("contact", cleanContact)
+                put("message", message.trim())
+            }.toString()
         } else null
     }
 
     private fun buildSmsJson(input: String): String? {
-        val regex = Regex("""(?i)(?:tell|message|msg|text|send)\s+([a-zA-Z0-9\s]+?)\s+(?:via|on)?\s*sms\s+(?:that|saying)?\s*[:\-]?\s*(.+)""")
+        val regex = Regex("""(?i)(?:tell|message|msg|text|send)\s+(.+?)\s+(?:via|on)?\s*sms\s*(?:that|saying)?\s*[:\-]?\s*(.+)""")
         val match = regex.find(input)
         return if (match != null) {
             val (contact, message) = match.destructured
-            """{"app":"sms","action":"send_message","contact":"${contact.trim()}","message":"${message.trim()}"}"""
+            val cleanContact = contact.replace(Regex("""(?i)\s+(?:via|on)$"""), "").trim()
+            JSONObject().apply {
+                put("app", "sms")
+                put("action", "send_message")
+                put("contact", cleanContact)
+                put("message", message.trim())
+            }.toString()
         } else null
     }
 
     private fun buildCallJson(input: String): String? {
         val contact = input.replace(Regex("""(?i)^(?:ring|give a ring to|phone call to|make a call to)\s+"""), "").trim()
         return if (contact.isNotBlank()) {
-            """{"app":"phone","action":"call","contact":"$contact"}"""
+            JSONObject().apply {
+                put("app", "phone")
+                put("action", "call")
+                put("contact", contact)
+            }.toString()
         } else null
     }
 
     private fun buildAppJson(input: String): String? {
         val app = input.replace(Regex("""(?i)^(?:take me to|switch to|open up|launch up)\s+"""), "").trim()
         return if (app.isNotBlank()) {
-            """{"app":"system","action":"open_app","appname":"$app"}"""
+            JSONObject().apply {
+                put("app", "system")
+                put("action", "open_app")
+                put("appname", app)
+            }.toString()
         } else null
     }
 

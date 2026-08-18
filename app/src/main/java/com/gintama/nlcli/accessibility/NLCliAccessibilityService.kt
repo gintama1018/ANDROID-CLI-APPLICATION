@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.ConcurrentLinkedQueue
 
 class NLCliAccessibilityService : AccessibilityService() {
 
@@ -42,12 +43,8 @@ class NLCliAccessibilityService : AccessibilityService() {
             return
         }
 
-        // If an automated send request is active and pending execution
-        val activeRequest = pendingRequest
-        if (activeRequest != null && activeRequest.isPending) {
-            Logger.d("WhatsApp event detected: ${event.eventType}. Initiating automation pipeline...")
-            triggerSendAutomation(activeRequest)
-        }
+        // Trigger queue processing if there are pending requests
+        checkAndProcessQueue()
     }
 
     override fun onInterrupt() {
@@ -61,7 +58,17 @@ class NLCliAccessibilityService : AccessibilityService() {
             instance = null
         }
         serviceScope.cancel()
+        requestQueue.clear()
         Logger.i("NLCliAccessibilityService destroyed")
+    }
+
+    private fun checkAndProcessQueue() {
+        if (automationJob?.isActive == true) {
+            return
+        }
+
+        val nextRequest = requestQueue.peek() ?: return
+        triggerSendAutomation(nextRequest)
     }
 
     private fun triggerSendAutomation(request: AutomationRequest) {
@@ -70,8 +77,7 @@ class NLCliAccessibilityService : AccessibilityService() {
         }
 
         automationJob = serviceScope.launch {
-            request.isPending = false
-            Logger.d("Starting robust auto-send search for request ID: ${request.id}")
+            Logger.d("Starting robust auto-send search for request: '${request.contactName}' (ID: ${request.id})")
 
             val startTime = SystemClock.uptimeMillis()
             val timeoutMs = 15000L // 15s budget for screen render and intermediary steps
@@ -107,7 +113,13 @@ class NLCliAccessibilityService : AccessibilityService() {
                             details = "Auto-clicked Send button (attempt $attempts, ${SystemClock.uptimeMillis() - startTime}ms)"
                         )
                         _automationResults.emit(result)
-                        pendingRequest = null
+                        requestQueue.remove(request)
+
+                        // Check if more requests are in queue
+                        if (requestQueue.isNotEmpty()) {
+                            delay(500L)
+                            checkAndProcessQueue()
+                        }
                         return@launch
                     }
 
@@ -144,7 +156,12 @@ class NLCliAccessibilityService : AccessibilityService() {
                 details = "Timeout after ${timeoutMs / 1000}s. Please tap Send manually. Check logs for hierarchy dump."
             )
             _automationResults.emit(failureResult)
-            pendingRequest = null
+            requestQueue.remove(request)
+
+            if (requestQueue.isNotEmpty()) {
+                delay(500L)
+                checkAndProcessQueue()
+            }
         }
     }
 
@@ -200,7 +217,6 @@ class NLCliAccessibilityService : AccessibilityService() {
     data class AutomationRequest(
         val id: String = System.currentTimeMillis().toString(),
         val contactName: String,
-        var isPending: Boolean = true,
         val timestampMs: Long = System.currentTimeMillis()
     )
 
@@ -211,21 +227,21 @@ class NLCliAccessibilityService : AccessibilityService() {
         var isServiceRunning: Boolean = false
             private set
 
-        var pendingRequest: AutomationRequest? = null
-            private set
+        private val requestQueue = ConcurrentLinkedQueue<AutomationRequest>()
 
         private val _automationResults = MutableSharedFlow<ExecutionResult>(extraBufferCapacity = 8)
         val automationResults: SharedFlow<ExecutionResult> = _automationResults.asSharedFlow()
 
         fun registerPendingSend(contactName: String): String {
             val req = AutomationRequest(contactName = contactName)
-            pendingRequest = req
-            Logger.d("Registered pending send request for '$contactName'")
+            requestQueue.add(req)
+            Logger.d("Enqueued pending send request for '$contactName' (Queue size: ${requestQueue.size})")
+            instance?.checkAndProcessQueue()
             return req.id
         }
 
         fun cancelPendingSend() {
-            pendingRequest = null
+            requestQueue.clear()
         }
     }
 }

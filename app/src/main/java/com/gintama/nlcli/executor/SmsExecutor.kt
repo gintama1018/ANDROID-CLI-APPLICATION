@@ -85,7 +85,7 @@ class SmsExecutor(
                     smsManager.sendTextMessage(targetNumber, null, message, null, null)
                 }
 
-                Logger.i("Direct SMS sent to $targetNumber")
+                Logger.i("Direct SMS sent to ${Logger.maskPhoneNumber(targetNumber)}")
                 return@withContext ExecutionResult(
                     success = true,
                     message = "SMS sent successfully to $rawContact ($targetNumber)"

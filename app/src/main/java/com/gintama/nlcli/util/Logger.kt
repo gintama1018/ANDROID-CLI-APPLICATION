@@ -8,27 +8,43 @@ object Logger {
 
     fun d(message: String) {
         if (verboseLoggingEnabled) {
-            Log.d(TAG, message)
+            try {
+                Log.d(TAG, message)
+            } catch (_: Throwable) {
+                println("DEBUG: [$TAG] $message")
+            }
         }
     }
 
     fun i(message: String) {
-        Log.i(TAG, message)
+        try {
+            Log.i(TAG, message)
+        } catch (_: Throwable) {
+            println("INFO: [$TAG] $message")
+        }
     }
 
     fun w(message: String, throwable: Throwable? = null) {
-        if (throwable != null) {
-            Log.w(TAG, message, throwable)
-        } else {
-            Log.w(TAG, message)
+        try {
+            if (throwable != null) {
+                Log.w(TAG, message, throwable)
+            } else {
+                Log.w(TAG, message)
+            }
+        } catch (_: Throwable) {
+            println("WARN: [$TAG] $message ${throwable?.message ?: ""}")
         }
     }
 
     fun e(message: String, throwable: Throwable? = null) {
-        if (throwable != null) {
-            Log.e(TAG, message, throwable)
-        } else {
-            Log.e(TAG, message)
+        try {
+            if (throwable != null) {
+                Log.e(TAG, message, throwable)
+            } else {
+                Log.e(TAG, message)
+            }
+        } catch (_: Throwable) {
+            println("ERROR: [$TAG] $message ${throwable?.message ?: ""}")
         }
     }
 
@@ -37,6 +53,13 @@ object Logger {
         if (verboseLoggingEnabled) return text
         // Mask payload to prevent sensitive info leakage in logs
         return if (text.length <= 4) "****" else "${text.take(2)}***${text.takeLast(2)}"
+    }
+
+    fun maskPhoneNumber(number: String?): String {
+        if (number.isNullOrBlank()) return "<null>"
+        if (verboseLoggingEnabled) return number
+        val digits = number.filter { it.isDigit() || it == '+' }
+        return if (digits.length <= 4) "****" else "${digits.take(3)}****${digits.takeLast(2)}"
     }
 
     fun maskCommandInput(rawInput: String, payload: String?): String {
