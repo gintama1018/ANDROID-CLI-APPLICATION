@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">NLCLI</string>
+    <string name="accessibility_service_label">NLCLI Automation Service</string>
+    <string name="accessibility_service_description">Enables hands-free command execution for WhatsApp message sending via local automation.</string>
+</resources>

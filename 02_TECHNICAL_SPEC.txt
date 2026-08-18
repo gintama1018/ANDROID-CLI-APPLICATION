@@ -1,0 +1,191 @@
+================================================================
+PROJECT: Offline Natural-Language CLI Controller for Android
+Codename: NLCLI
+Doc type: Technical Specification (implementation detail)
+Companion to: 01_BUILD_PLAN.txt
+================================================================
+
+SECTION 1 — MODULE / PACKAGE STRUCTURE
+----------------------------------------------------------------
+com.gintama.nlcli
+ |-- ui/              CommandBarScreen.kt, HistoryScreen.kt
+ |-- parser/           RegexParser.kt, LlmParser.kt, ParserResult.kt
+ |-- model/            Command.kt, CommandType.kt, ExecutionResult.kt
+ |-- dispatcher/        CommandDispatcher.kt
+ |                      (routes a parsed Command to the right
+ |                       executor based on `app` + `action`)
+ |-- executor/          WhatsAppExecutor.kt, SmsExecutor.kt,
+ |                      CallExecutor.kt, AppLauncherExecutor.kt
+ |-- accessibility/      NLCliAccessibilityService.kt, NodeFinder.kt
+ |-- contacts/          ContactResolver.kt
+ |-- data/              AppDatabase.kt, CommandHistoryDao.kt,
+ |                      CommandHistoryEntity.kt
+ |-- util/              Logger.kt, PermissionHelper.kt
+
+SECTION 2 — COMMAND SCHEMA
+----------------------------------------------------------------
+data class Command(
+    val app: String,           // "whatsapp" | "sms" | "phone" | "system"
+    val action: String,        // "send_message" | "call" | "open_app"
+    val contact: String?,      // raw name as typed by the user
+    val payload: String?,      // message body, if applicable
+    val rawInput: String,      // original typed command (for logs/debug)
+    val source: ParseSource    // REGEX or LLM
+)
+
+data class ExecutionResult(
+    val success: Boolean,
+    val message: String,       // human-readable outcome, shown to user
+    val timestampMs: Long
+)
+
+SECTION 3 — NLU / PARSER DESIGN
+----------------------------------------------------------------
+3a. Regex table (v1) — evaluate top to bottom, first match wins.
+    Named capture groups keep this readable:
+
+    (?i)send (whatsapp|wa) to (?<contact>[\w\s]+?)[:\-]\s*(?<message>.+)
+    (?i)call (?<contact>[\w\s]+)
+    (?i)send sms to (?<contact>[\w\s]+?)[:\-]\s*(?<message>.+)
+    (?i)open (?<appname>[\w\s]+)
+
+    Regex matches are deterministic -> treat as confidence 1.0.
+    Keep all patterns in one ordered list (COMMAND_PATTERNS) so
+    adding a new command type is a one-line change.
+
+3b. LLM parser (v3) — prompt template:
+
+    System prompt:
+      "You are a command parser for an Android automation app.
+       Given a user instruction, output ONLY valid JSON matching
+       this schema: {app, action, contact, message}.
+       No prose, no markdown fences, no explanation."
+
+    Include 2-3 few-shot examples directly in the prompt so the
+    model locks onto the exact schema.
+
+    Validate the output against the schema before trusting it.
+    On validation failure: fall back to the regex parser, or if
+    that also fails, surface "didn't understand that, try
+    rephrasing" rather than guessing.
+
+3c. Fallback chain:
+    regex (fast, free, deterministic)
+      -> if no match, try LLM parser
+        -> if LLM output is invalid JSON or missing required
+           fields, reject and ask user to rephrase
+
+    Never let an ambiguous parse silently trigger a message send —
+    that's the one action where a wrong guess actually does
+    something in the real world.
+
+SECTION 4 — ACCESSIBILITY SERVICE: IMPLEMENTATION DETAIL
+----------------------------------------------------------------
+Service config (res/xml/accessibility_service_config.xml):
+    canRetrieveWindowContent = true
+    packageNames = ["com.whatsapp"]     <- scope tightly, don't
+                                            leave this wildcarded
+    eventTypes = typeWindowStateChanged | typeWindowContentChanged
+
+Execution flow:
+  1. Dispatcher launches:
+       Intent(ACTION_VIEW,
+         Uri.parse("https://wa.me/$number?text=$encodedMessage"))
+         .setPackage("com.whatsapp")
+  2. NLCliAccessibilityService.onAccessibilityEvent fires on window
+     state change; checks event.packageName == "com.whatsapp"
+  3. NodeFinder walks the AccessibilityNodeInfo tree (DFS/BFS) for
+     a node matching, in priority order:
+       a) viewIdResourceName == "com.whatsapp:id/send"
+       b) contentDescription containing "Send" (fallback — also
+          check localized variants if the phone's WhatsApp is set
+          to Hindi, e.g. "भेजें")
+  4. If found: node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+     -> return ExecutionResult(success = true, ...)
+  5. If not found within a bounded timeout (poll every ~300ms, give
+     up after ~4s since the chat screen may still be loading):
+     -> return ExecutionResult(success = false, ...), notify the
+        user, and log the node dump so you can update selectors
+        after a WhatsApp UI change
+
+Node lifecycle: be careful with AccessibilityNodeInfo — don't hold
+references longer than needed; on older API levels call recycle()
+after use to avoid leaks (behavior changed in newer Android
+versions, verify against your target min/target SDK).
+
+SECTION 5 — INTENT LAUNCH DETAIL
+----------------------------------------------------------------
+  URL format : https://wa.me/<E.164 number, no leading +>?text=<url-encoded message>
+  Number fmt : always normalize to E.164 before building the URL.
+               Since your primary use case is Indian contacts,
+               simple +91-prefixing logic covers most cases; use
+               libphonenumber if you want it to be robust generally.
+  Targeting  : always set the intent's package explicitly to
+               "com.whatsapp" (or "com.whatsapp.w4b" for Business)
+               so Android doesn't pop up an app chooser dialog.
+
+SECTION 6 — CONTACT RESOLUTION
+----------------------------------------------------------------
+  - Query ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+    filter DISPLAY_NAME LIKE %name%
+  - Multiple matches (v1): pick best Levenshtein-distance match,
+    log the ambiguity
+  - Multiple matches (v2): surface a quick disambiguation UI
+    ("did you mean Rahul Sharma or Rahul Verma?")
+  - Cache resolved name -> number pairs in Room so repeated
+    commands don't re-query ContactsContract every time
+
+SECTION 7 — ERROR HANDLING & USER FEEDBACK
+----------------------------------------------------------------
+  - Every executor returns an ExecutionResult; dispatcher surfaces
+    it as a Toast/Snackbar and writes it to the Room history table
+  - On accessibility node-not-found: cap retries at 3, then fail
+    loudly with a specific message ("couldn't find the Send button
+    — WhatsApp's UI may have changed") rather than failing silently
+  - Never swallow exceptions in the executor layer — log + surface,
+    always
+
+SECTION 8 — SECURITY & PRIVACY CONSIDERATIONS
+----------------------------------------------------------------
+This app has screen-reading + UI-injection capability once the
+Accessibility Service is granted — treat that access level with
+real discipline:
+
+  - Don't persist full message contents in logs by default; log
+    command type + timestamp + success/fail only, unless the user
+    explicitly opts into verbose history
+  - Sanitize all parsed text before it goes into a URL (wa.me
+    intent) or an accessibility action — avoid broken encoding or
+    unintended field injection
+  - Keep packageNames in the accessibility service config scoped to
+    exactly the apps you support — never wildcard it
+  - If this is ever open-sourced, document clearly in the README
+    that it has real device-control capability, so nobody sideloads
+    it without understanding what they're granting
+
+SECTION 9 — LOCAL LLM INTEGRATION NOTES (Phase 3)
+----------------------------------------------------------------
+  - MediaPipe LLM Inference API supports bundled .task model files.
+    Gemma 2B at int4 quantization is roughly 1.2-1.5GB — decide
+    whether to bundle it in the APK (larger install size) or fetch
+    it once on first launch from an asset source you control. Either
+    way this is a one-time setup step, not a runtime dependency —
+    "no internet needed to control the phone" still holds.
+  - Expect roughly 1-3 seconds per parse on a mid-range phone —
+    fine for a CLI tool, not built for real-time voice interaction.
+  - Keep regex as the default/fast path. Only invoke the LLM parser
+    when regex confidently fails to match, so the majority of
+    commands never pay the latency cost.
+
+SECTION 10 — DEVICE / OS TEST MATRIX
+----------------------------------------------------------------
+  - Minimum: your primary phone, current WhatsApp version
+  - Recommended: one Xiaomi/MIUI device (aggressive background-kill
+    behavior, good stress test), one closer-to-stock Android device
+    for baseline comparison
+  - SDK range: test at min SDK 26 and at the latest SDK available
+    to you
+
+================================================================
+END OF TECHNICAL SPEC
+================================================================

@@ -1,0 +1,42 @@
+# Gradle files
+.gradle/
+build/
+app/build/
+
+# Local configuration file (sdk.dir, etc.)
+local.properties
+
+# Log Files
+*.log
+
+# Android Studio Navigation editor temp files
+.navigation/
+
+# Android Studio captures folder
+captures/
+
+# IntelliJ IDEA
+*.iml
+.idea/
+.idea/libraries
+.idea/modules.xml
+.idea/workspace.xml
+.idea/caches/
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+
+# Keystore files
+*.jks
+*.keystore
+
+# Google Services (if used)
+google-services.json
+
+# Output build artifacts
+*.apk
+*.aab
+*.ap_
+
+# OS files
+.DS_Store
+Thumbs.db

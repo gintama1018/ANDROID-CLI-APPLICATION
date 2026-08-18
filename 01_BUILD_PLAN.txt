@@ -1,0 +1,239 @@
+================================================================
+PROJECT: Offline Natural-Language CLI Controller for Android
+Codename: NLCLI (rename freely — e.g. under Silver Soul Studios)
+Prepared for: Sonu (GINTAMA)
+Doc type: Build Plan / Roadmap
+================================================================
+
+SECTION 1 — EXECUTIVE SUMMARY
+----------------------------------------------------------------
+Goal: a single command-bar input on Android where typing a natural
+language instruction ("send whatsapp to Rahul: reaching in 10 mins")
+executes it directly on the phone — no internet dependency for
+parsing OR execution.
+
+Two hard technical facts to accept before writing any code:
+
+1. A "true CLI" environment on Android (Termux) has no way to
+   control another app's UI. It is sandboxed like any other app.
+   Termux:API can send SMS, make calls, read notifications — but
+   it cannot click a button inside WhatsApp.
+
+2. WhatsApp has no public API for silently sending a message.
+   The only way to make this fully hands-off is to open WhatsApp
+   to the right chat with the message pre-filled (this part IS
+   supported, via the wa.me intent scheme) and then simulate the
+   tap on the Send button using Android's AccessibilityService.
+
+Conclusion: this has to be built as a native Android app (Kotlin)
+with an AccessibilityService as the execution backend. The "CLI
+feel" is a UI choice (a plain text input styled like a terminal),
+not a different runtime.
+
+SECTION 2 — GOALS
+----------------------------------------------------------------
+Must-have (v1):
+  - Type a command, WhatsApp text message gets sent to a named
+    contact, fully offline, zero manual taps.
+
+Should-have (v2):
+  - SMS send, phone call, open app by name — all via direct
+    Android APIs (no UI automation needed for these).
+
+Could-have (v3):
+  - Free-form natural language via an on-device LLM instead of
+    fixed regex patterns.
+  - Command history/log.
+  - Macros — one command triggers a sequence
+    (e.g. "goodnight" = 3 chained actions).
+
+Non-goals (explicitly out of scope for now):
+  - Cloud/voice-assistant integration.
+  - Multi-device sync.
+  - Play Store distribution (Accessibility Service apps get extra
+    policy scrutiny — treat this as a personal sideloaded tool
+    unless you later decide to pursue a legitimate accessibility
+    justification for store listing).
+
+SECTION 3 — HIGH-LEVEL ARCHITECTURE
+----------------------------------------------------------------
+  [Command Input UI]
+          |
+          v
+  [NLU / Parser Layer]   -- regex first (v1), local LLM later (v3)
+          |
+          v
+  [Structured Command Object]  (app, action, contact, payload)
+          |
+          v
+  [Command Dispatcher / Router]
+          |
+          v
+  [Execution Layer]
+     -> Direct Android APIs   (SMS via SmsManager, Call via
+        Intent.ACTION_CALL, alarms via AlarmManager)
+     -> AccessibilityService  (for apps with no public send API,
+        e.g. WhatsApp)
+          |
+          v
+  [Feedback to user]  (toast / notification / history log)
+
+SECTION 4 — TECH STACK
+----------------------------------------------------------------
+  Language        : Kotlin
+  UI              : Jetpack Compose (single-screen command bar,
+                    fast to iterate on)
+  Background exec : AccessibilityService, optionally backed by a
+                    foreground service for reliability on OEMs
+                    that kill background processes aggressively
+  Local storage   : Room DB (command history, cached contact
+                    name -> number resolutions)
+  Local NLU (v3)  : Google's MediaPipe LLM Inference API running
+                    a quantized Gemma 2B (int4) model — first
+                    choice because it's officially supported for
+                    on-device Android inference, fully offline.
+                    llama.cpp via JNI is a fallback if you want
+                    more model flexibility later.
+  Build           : Gradle, min SDK 26 (Accessibility APIs are
+                    stable from here), target latest SDK.
+
+SECTION 5 — PERMISSIONS REQUIRED
+----------------------------------------------------------------
+  BIND_ACCESSIBILITY_SERVICE  - core; user must enable manually
+                                 under Settings > Accessibility
+                                 (cannot be auto-granted, by design)
+  READ_CONTACTS               - resolve "Rahul" -> phone number
+  SEND_SMS                    - only if SMS feature is built
+  CALL_PHONE                  - only if direct-dial is built;
+                                 otherwise ACTION_CALL intent opens
+                                 the dialer without this permission
+  SYSTEM_ALERT_WINDOW          - optional, for a floating overlay
+                                 command bar accessible from any app
+  FOREGROUND_SERVICE           - keeps the accessibility pipeline
+                                 responsive in the background
+  QUERY_ALL_PACKAGES           - only needed if you expand to
+                                 controlling many third-party apps
+
+SECTION 6 — PHASED ROADMAP
+----------------------------------------------------------------
+PHASE 0 — Setup (2-3 days)
+  - New Android Studio project, Kotlin + Compose
+  - Single screen, plain text field styled like a terminal
+  - Git repo, README, basic CI-free local build verified
+
+PHASE 1 — MVP: WhatsApp text-send via regex (1-2 weeks)
+  Deliverables:
+  - Regex parser recognizing patterns like:
+      "send whatsapp to <name>: <message>"
+      "whatsapp <name> <message>"
+  - Contact lookup via ContactsContract (exact + basic fuzzy match)
+  - Intent launch: https://wa.me/<number>?text=<encoded message>
+  - AccessibilityService that detects the WhatsApp chat window,
+    waits for it to load, finds the Send button node, and performs
+    a click action on it
+  - Manual end-to-end test on your own device
+
+PHASE 2 — Expand command set (1 week)
+  Deliverables:
+  - SMS send via SmsManager (direct API, no automation needed)
+  - Phone call via Intent.ACTION_CALL
+  - Open-app-by-name via PackageManager + launch intent
+  - Command history log in Room, useful for debugging failures
+
+PHASE 3 — Local LLM-based NLU (2-3 weeks, budget extra time — this
+  is the riskiest phase)
+  Deliverables:
+  - MediaPipe LLM Inference API integrated, Gemma 2B (int4) as the
+    model
+  - Prompt template that forces strict JSON output:
+      {"app":"whatsapp","action":"send_message",
+       "contact":"Rahul","message":"reaching in 10 mins"}
+  - Fallback: if LLM output fails JSON validation, fall back to
+    the regex parser, or ask the user to rephrase
+  - Benchmark parse latency on your actual device (target: under
+    2-3 seconds)
+
+PHASE 4 — Hardening & Security (1 week)
+  Deliverables:
+  - Sanitize all parsed text before it's used in an accessibility
+    action or intent (prevent malformed/injected input)
+  - Handle OEM battery-optimization killing the accessibility
+    service (MIUI, OneUI are the worst offenders) — prompt user to
+    whitelist the app
+  - Bounded retry logic if the send-button node isn't found (UI
+    may have changed) — fail loudly with a clear message instead
+    of silently doing nothing
+  - Privacy hygiene: don't persist full message contents in logs
+    by default
+
+PHASE 5 — Polish (ongoing)
+  - Floating overlay command bar for faster access from anywhere
+  - Command aliases / macros
+  - Theming, better error surfaces
+  - Optional quick-settings tile shortcut
+
+SECTION 7 — ROUGH TIMELINE (solo, part-time around college + CAT prep)
+----------------------------------------------------------------
+  Week 1      : Phase 0 + start Phase 1
+  Week 2-3    : Finish Phase 1 (working WhatsApp auto-send)
+  Week 4      : Phase 2
+  Week 5-7    : Phase 3 (LLM integration)
+  Week 8      : Phase 4
+  Ongoing     : Phase 5
+
+SECTION 8 — RISK REGISTER
+----------------------------------------------------------------
+  1. WhatsApp updates its UI/view-IDs -> automation breaks.
+     Mitigation: match by content-description text as a fallback,
+     not only view-id; keep a small compatibility table you update
+     when it breaks.
+
+  2. OEM battery optimization kills the AccessibilityService in
+     the background.
+     Mitigation: prompt user to whitelist the app; run a foreground
+     service with a persistent (dismissible) notification.
+
+  3. Play Store policy risk — apps using Accessibility Service for
+     non-accessibility automation get flagged/rejected.
+     Mitigation: this is fine for personal/sideloaded use. Only a
+     concern if you later want public distribution.
+
+  4. On-device LLM latency/memory on lower-end phones.
+     Mitigation: regex stays the always-available fast path; LLM
+     parsing only kicks in when regex confidently fails to match.
+
+  5. Privacy — this app reads on-screen content and injects taps.
+     That's a lot of trust. Treat message contents and logs with
+     the same discipline you'd want from any app with that level
+     of access.
+
+SECTION 9 — TESTING STRATEGY
+----------------------------------------------------------------
+  - Unit tests for the regex parser (input/expected-output pairs)
+  - Manual device matrix: your primary phone + ideally one other
+    OEM/Android version
+  - Use Layout Inspector / uiautomatorviewer to dump WhatsApp's
+    current view hierarchy before writing node-matching selectors
+  - Add a "dry-run" mode: parse and display "would do X" without
+    executing, for safe iteration
+
+SECTION 10 — SUCCESS METRICS
+----------------------------------------------------------------
+  - Recognition accuracy on your top 10 daily-use commands
+  - End-to-end success rate of WhatsApp auto-send over 20 attempts
+  - Time from typing the command to message actually sent
+
+SECTION 11 — FUTURE EXTENSIONS
+----------------------------------------------------------------
+  - Support more apps (Telegram, default SMS app, calendar)
+  - Voice input layered on top of the text CLI
+  - Scheduled/conditional commands
+    ("every day at 9pm send mom good night")
+  - Open-source it under the Silver Soul Studios / GINTAMA brand
+    once it's stable
+
+================================================================
+END OF BUILD PLAN — see 02_TECHNICAL_SPEC.txt for implementation
+detail (module structure, command schema, AccessibilityService
+internals, security notes, LLM integration specifics).
+================================================================
