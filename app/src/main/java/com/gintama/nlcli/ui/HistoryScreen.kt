@@ -8,9 +8,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -46,6 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gintama.nlcli.data.entity.CommandHistoryEntity
+import com.gintama.nlcli.ui.theme.CormorantGaramond
 import com.gintama.nlcli.ui.theme.TerminalAmber
 import com.gintama.nlcli.ui.theme.TerminalBackground
 import com.gintama.nlcli.ui.theme.TerminalBorder
@@ -121,6 +124,8 @@ fun HistoryScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .consumeWindowInsets(paddingValues)
+                .imePadding()
                 .padding(horizontal = 12.dp)
         ) {
             Spacer(modifier = Modifier.height(8.dp))
@@ -145,10 +150,10 @@ fun HistoryScreen(
                     )
                 },
                 singleLine = true,
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = TerminalSurface,
-                    unfocusedContainerColor = TerminalSurface,
+                    focusedContainerColor = TerminalSurfaceVariant,
+                    unfocusedContainerColor = TerminalSurfaceVariant,
                     focusedBorderColor = TerminalGreen,
                     unfocusedBorderColor = TerminalBorder,
                     focusedTextColor = TextBright,
@@ -184,7 +189,7 @@ fun HistoryScreen(
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = TerminalGreen,
                             selectedLabelColor = TerminalBackground,
-                            containerColor = TerminalSurface,
+                            containerColor = TerminalSurfaceVariant,
                             labelColor = TextMuted
                         ),
                         border = FilterChipDefaults.filterChipBorder(
@@ -192,7 +197,7 @@ fun HistoryScreen(
                             selected = isSelected,
                             borderColor = if (isSelected) TerminalGreen else TerminalBorder
                         ),
-                        shape = RoundedCornerShape(6.dp)
+                        shape = RoundedCornerShape(8.dp)
                     )
                 }
             }
@@ -245,9 +250,9 @@ fun HistoryItemCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(TerminalSurface)
-            .border(1.dp, TerminalBorder, RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(12.dp))
+            .background(TerminalSurfaceVariant)
+            .border(1.dp, TerminalBorder, RoundedCornerShape(12.dp))
             .padding(12.dp)
     ) {
         Row(
@@ -257,7 +262,7 @@ fun HistoryItemCard(
             // Success / Failure indicator badge
             Surface(
                 color = if (item.success) TerminalGreen.copy(alpha = 0.15f) else TerminalRed.copy(alpha = 0.15f),
-                shape = RoundedCornerShape(4.dp)
+                shape = RoundedCornerShape(6.dp)
             ) {
                 Text(
                     text = if (item.success) "SUCCESS" else "FAILED",
@@ -275,8 +280,8 @@ fun HistoryItemCard(
 
             // App badge
             Surface(
-                color = TerminalSurfaceVariant,
-                shape = RoundedCornerShape(4.dp)
+                color = TerminalSurface,
+                shape = RoundedCornerShape(6.dp)
             ) {
                 Text(
                     text = item.app.uppercase(),
@@ -336,8 +341,8 @@ fun HistoryItemCard(
                 onClick = onReplay,
                 modifier = Modifier
                     .size(28.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(TerminalSurfaceVariant)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(TerminalSurface)
             ) {
                 Icon(
                     imageVector = Icons.Default.PlayArrow,

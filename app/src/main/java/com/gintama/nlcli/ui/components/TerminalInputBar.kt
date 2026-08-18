@@ -42,10 +42,11 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gintama.nlcli.ui.theme.PromptColor
+import com.gintama.nlcli.ui.theme.TerminalBackground
 import com.gintama.nlcli.ui.theme.TerminalBorder
 import com.gintama.nlcli.ui.theme.TerminalGreen
 import com.gintama.nlcli.ui.theme.TerminalRed
-import com.gintama.nlcli.ui.theme.TerminalSurface
+import com.gintama.nlcli.ui.theme.TerminalSurfaceVariant
 import com.gintama.nlcli.ui.theme.TextBright
 import com.gintama.nlcli.ui.theme.TextSubtle
 
@@ -64,7 +65,7 @@ fun TerminalInputBar(
     val infiniteTransition = rememberInfiniteTransition(label = "micPulse")
     val pulseScale by infiniteTransition.animateFloat(
         initialValue = 1f,
-        targetValue = if (isListening) 1.25f else 1f,
+        targetValue = if (isListening) 1.2f else 1f,
         animationSpec = infiniteRepeatable(
             animation = tween(600),
             repeatMode = RepeatMode.Reverse
@@ -76,14 +77,14 @@ fun TerminalInputBar(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 8.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(TerminalSurface)
+            .clip(RoundedCornerShape(16.dp))
+            .background(TerminalSurfaceVariant)
             .border(
                 1.dp,
                 if (isListening) TerminalRed else TerminalBorder,
-                RoundedCornerShape(8.dp)
+                RoundedCornerShape(16.dp)
             )
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+            .padding(horizontal = 10.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Prompt indicator `>`
@@ -137,8 +138,8 @@ fun TerminalInputBar(
             modifier = Modifier
                 .size(32.dp)
                 .scale(if (isListening) pulseScale else 1f)
-                .clip(RoundedCornerShape(4.dp))
-                .background(if (isListening) TerminalRed.copy(alpha = 0.25f) else TerminalSurface)
+                .clip(RoundedCornerShape(8.dp))
+                .background(if (isListening) TerminalRed.copy(alpha = 0.2f) else TerminalSurfaceVariant)
         ) {
             Icon(
                 imageVector = Icons.Default.Mic,
@@ -151,38 +152,38 @@ fun TerminalInputBar(
         // History Navigation Buttons
         IconButton(
             onClick = onHistoryUp,
-            modifier = Modifier.size(32.dp)
+            modifier = Modifier.size(30.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.ArrowUpward,
                 contentDescription = "History Previous",
                 tint = TextSubtle,
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(15.dp)
             )
         }
 
         IconButton(
             onClick = onHistoryDown,
-            modifier = Modifier.size(32.dp)
+            modifier = Modifier.size(30.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.ArrowDownward,
                 contentDescription = "History Next",
                 tint = TextSubtle,
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(15.dp)
             )
         }
 
         if (value.isNotEmpty()) {
             IconButton(
                 onClick = { onValueChange("") },
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(30.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Clear,
                     contentDescription = "Clear Input",
                     tint = TextSubtle,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(15.dp)
                 )
             }
         }
@@ -203,14 +204,14 @@ fun TerminalInputBar(
                 onClick = onExecute,
                 modifier = Modifier
                     .size(32.dp)
-                    .clip(RoundedCornerShape(4.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(if (value.isNotBlank()) TerminalGreen else TerminalBorder)
             ) {
                 Icon(
                     imageVector = Icons.Default.PlayArrow,
                     contentDescription = "Execute Command",
-                    tint = if (value.isNotBlank()) TerminalSurface else TextSubtle,
-                    modifier = Modifier.size(20.dp)
+                    tint = if (value.isNotBlank()) TerminalBackground else TextSubtle,
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }

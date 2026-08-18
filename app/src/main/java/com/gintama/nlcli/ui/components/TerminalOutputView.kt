@@ -102,7 +102,7 @@ fun TerminalLineItem(line: TerminalLine) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(4.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(TerminalSurfaceVariant.copy(alpha = 0.6f))
                     .padding(8.dp)
             ) {
@@ -141,7 +141,7 @@ fun TerminalLineItem(line: TerminalLine) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(4.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(TerminalRed.copy(alpha = 0.15f))
                     .padding(8.dp)
             ) {

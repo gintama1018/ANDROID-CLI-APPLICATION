@@ -67,7 +67,7 @@ fun QuickActionChips(
                     borderColor = TerminalBorder,
                     borderWidth = 1.dp
                 ),
-                shape = RoundedCornerShape(6.dp)
+                shape = RoundedCornerShape(8.dp)
             )
         }
     }

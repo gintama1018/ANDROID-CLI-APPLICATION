@@ -1,11 +1,14 @@
 package com.gintama.nlcli.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -29,7 +32,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -37,10 +39,13 @@ import com.gintama.nlcli.ui.components.PermissionBanner
 import com.gintama.nlcli.ui.components.QuickActionChips
 import com.gintama.nlcli.ui.components.TerminalInputBar
 import com.gintama.nlcli.ui.components.TerminalOutputView
+import com.gintama.nlcli.ui.theme.CormorantGaramond
 import com.gintama.nlcli.ui.theme.TerminalBackground
 import com.gintama.nlcli.ui.theme.TerminalBorder
+import com.gintama.nlcli.ui.theme.TerminalCyan
 import com.gintama.nlcli.ui.theme.TerminalGreen
 import com.gintama.nlcli.ui.theme.TerminalSurface
+import com.gintama.nlcli.ui.theme.TerminalSurfaceVariant
 import com.gintama.nlcli.ui.theme.TextBright
 import com.gintama.nlcli.ui.theme.TextMuted
 import com.gintama.nlcli.ui.viewmodel.CliViewModel
@@ -68,22 +73,23 @@ fun CommandBarScreen(
                         Text(
                             text = "NLCLI",
                             style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = CormorantGaramond,
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 24.sp,
                                 color = TerminalGreen,
-                                letterSpacing = 1.sp
+                                letterSpacing = 1.5.sp
                             )
                         )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        // Offline status badge
+                        Spacer(modifier = Modifier.width(12.dp))
+                        // Refined warm status badge
                         Surface(
-                            color = TerminalSurface,
-                            shape = RoundedCornerShape(12.dp),
+                            color = TerminalSurfaceVariant,
+                            shape = RoundedCornerShape(8.dp),
                             border = androidx.compose.foundation.BorderStroke(1.dp, TerminalBorder)
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                             ) {
                                 Box(
                                     modifier = Modifier
@@ -91,13 +97,13 @@ fun CommandBarScreen(
                                         .clip(CircleShape)
                                         .background(TerminalGreen)
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
+                                Spacer(modifier = Modifier.width(5.dp))
                                 Text(
                                     text = "OFFLINE",
                                     style = MaterialTheme.typography.bodySmall.copy(
                                         color = TextMuted,
                                         fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold
+                                        fontWeight = FontWeight.SemiBold
                                     )
                                 )
                             }
@@ -131,8 +137,10 @@ fun CommandBarScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .consumeWindowInsets(paddingValues)
+                .imePadding()
         ) {
-            // Permission Banner (if Accessibility or Contacts permission is missing)
+            // Permission Banner (if Accessibility, Contacts or Audio permission is missing)
             PermissionBanner(
                 isAccessibilityEnabled = uiState.isAccessibilityEnabled,
                 hasContactsPermission = uiState.hasContactsPermission,
@@ -152,7 +160,7 @@ fun CommandBarScreen(
                 }
             )
 
-            // Terminal Input Prompt with Push-to-Talk Mic
+            // Terminal Input Prompt with Push-to-Talk Mic & Pill Shape
             TerminalInputBar(
                 value = uiState.inputText,
                 onValueChange = { viewModel.onInputChange(it) },

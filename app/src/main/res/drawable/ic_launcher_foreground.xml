@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Chevron ">" prompt mark, kept inside the 66dp adaptive icon safe zone -->
+    <path
+        android:fillColor="#D9A55C"
+        android:pathData="M40,34 L64,54 L40,74"
+        android:strokeColor="#D9A55C"
+        android:strokeWidth="9"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>
