@@ -55,11 +55,21 @@ class WhatsAppExecutor(
         }
 
         val targetPackage = if (isStandardInstalled) "com.whatsapp" else "com.whatsapp.w4b"
+        val isAccessibilityEnabled = PermissionHelper.isAccessibilityServiceEnabled(context)
+
+        // Guard against intent collision if another automated send job is actively inspecting WhatsApp UI
+        if (isAccessibilityEnabled && NLCliAccessibilityService.isAutomationBusy) {
+            return@withContext ExecutionResult(
+                success = false,
+                message = "WhatsApp automation is currently in progress for another message. Please wait a moment.",
+                details = "Wait for the active hands-free send to complete before dispatching another message."
+            )
+        }
 
         // Resolve contact
         val resolvedPhone = when (val resolution = contactResolver.resolveContact(rawContact)) {
             is ContactResolutionResult.Found -> {
-                Logger.d("Resolved contact '${rawContact}' -> '${resolution.contact.displayName}' (${resolution.contact.normalizedPhoneNumber})")
+                Logger.d("Resolved contact '${rawContact}' -> '${resolution.contact.displayName}' (${Logger.maskPhoneNumber(resolution.contact.normalizedPhoneNumber)})")
                 PhoneNormalizer.toWhatsAppUrlNumber(resolution.contact.normalizedPhoneNumber)
             }
             is ContactResolutionResult.Ambiguous -> {
@@ -106,8 +116,6 @@ class WhatsAppExecutor(
 
         val url = "https://wa.me/$resolvedPhone?text=$encodedMessage"
         Logger.d("Launching WhatsApp wa.me URL targeting $targetPackage")
-
-        val isAccessibilityEnabled = PermissionHelper.isAccessibilityServiceEnabled(context)
 
         // Register pending send in accessibility service if enabled
         if (isAccessibilityEnabled) {

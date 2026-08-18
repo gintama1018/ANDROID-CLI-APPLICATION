@@ -85,7 +85,7 @@ class VoiceInputManager(private val context: Context) {
                         val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         if (!matches.isNullOrEmpty()) {
                             val recognized = matches[0].trim()
-                            Logger.i("Speech recognition result: '$recognized'")
+                            Logger.d("Speech recognition captured: '${Logger.sanitizeForLog(recognized)}'")
                             _partialText.value = recognized
                             onResult(recognized)
                         }
@@ -112,7 +112,7 @@ class VoiceInputManager(private val context: Context) {
             }
 
             speechRecognizer?.startListening(intent)
-            Logger.i("Started offline speech listening")
+            Logger.d("Started offline speech listening")
         } catch (e: Exception) {
             _isListening.value = false
             Logger.e("Failed to start speech recognizer", e)
