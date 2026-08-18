@@ -9,7 +9,10 @@ class NlCliApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         Logger.i("NLCLI Application initialized")
-        // Initialize Room Database eagerly
-        AppDatabase.getInstance(this)
+        try {
+            AppDatabase.getInstance(this)
+        } catch (e: Exception) {
+            Logger.e("Failed to initialize database eagerly in Application.onCreate", e)
+        }
     }
 }

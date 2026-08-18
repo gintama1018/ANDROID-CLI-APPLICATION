@@ -35,13 +35,17 @@ fun NLCLITheme(content: @Composable () -> Unit) {
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
-            val window = (view.context as Activity).window
-            window.statusBarColor = TerminalBackground.toArgb()
-            window.navigationBarColor = TerminalBackground.toArgb()
-            WindowCompat.getInsetsController(window, view).apply {
-                isAppearanceLightStatusBars = false
-                isAppearanceLightNavigationBars = false
-            }
+            try {
+                val activity = view.context as? Activity
+                activity?.window?.let { window ->
+                    window.statusBarColor = TerminalBackground.toArgb()
+                    window.navigationBarColor = TerminalBackground.toArgb()
+                    WindowCompat.getInsetsController(window, view).apply {
+                        isAppearanceLightStatusBars = false
+                        isAppearanceLightNavigationBars = false
+                    }
+                }
+            } catch (_: Exception) {}
         }
     }
 

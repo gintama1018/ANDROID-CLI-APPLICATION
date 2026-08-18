@@ -26,7 +26,11 @@ class VoiceInputManager(private val context: Context) {
     val rmsDb: StateFlow<Float> = _rmsDb.asStateFlow()
 
     val isRecognitionAvailable: Boolean
-        get() = SpeechRecognizer.isRecognitionAvailable(context)
+        get() = try {
+            SpeechRecognizer.isRecognitionAvailable(context)
+        } catch (_: Exception) {
+            false
+        }
 
     fun startListening(
         onResult: (String) -> Unit,
