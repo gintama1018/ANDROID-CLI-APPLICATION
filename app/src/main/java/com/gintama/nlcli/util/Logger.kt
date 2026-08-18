@@ -38,4 +38,10 @@ object Logger {
         // Mask payload to prevent sensitive info leakage in logs
         return if (text.length <= 4) "****" else "${text.take(2)}***${text.takeLast(2)}"
     }
+
+    fun maskCommandInput(rawInput: String, payload: String?): String {
+        if (verboseLoggingEnabled || payload.isNullOrBlank()) return rawInput
+        val masked = sanitizeForLog(payload)
+        return rawInput.replace(payload, masked)
+    }
 }

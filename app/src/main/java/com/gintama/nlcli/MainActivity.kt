@@ -1,7 +1,6 @@
 package com.gintama.nlcli
 
 import android.Manifest
-import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -12,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.core.content.ContextCompat
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -33,10 +31,19 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             NLCLITheme {
-                val permissionLauncher = rememberLauncherForActivityResult(
+                val generalPermissionLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.RequestMultiplePermissions()
                 ) {
                     cliViewModel.refreshPermissions()
+                }
+
+                val audioPermissionLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.RequestPermission()
+                ) { granted ->
+                    cliViewModel.refreshPermissions()
+                    if (granted) {
+                        cliViewModel.toggleVoiceInput { }
+                    }
                 }
 
                 Surface(
@@ -47,13 +54,17 @@ class MainActivity : ComponentActivity() {
                         cliViewModel = cliViewModel,
                         historyViewModel = historyViewModel,
                         onRequestPermissions = {
-                            permissionLauncher.launch(
+                            generalPermissionLauncher.launch(
                                 arrayOf(
                                     Manifest.permission.READ_CONTACTS,
                                     Manifest.permission.SEND_SMS,
-                                    Manifest.permission.CALL_PHONE
+                                    Manifest.permission.CALL_PHONE,
+                                    Manifest.permission.RECORD_AUDIO
                                 )
                             )
+                        },
+                        onRequestAudioPermission = {
+                            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                         }
                     )
                 }
@@ -71,7 +82,8 @@ class MainActivity : ComponentActivity() {
 fun AppNavigation(
     cliViewModel: CliViewModel,
     historyViewModel: HistoryViewModel,
-    onRequestPermissions: () -> Unit
+    onRequestPermissions: () -> Unit,
+    onRequestAudioPermission: () -> Unit
 ) {
     val navController = rememberNavController()
 
@@ -83,7 +95,8 @@ fun AppNavigation(
             CommandBarScreen(
                 viewModel = cliViewModel,
                 onNavigateToHistory = { navController.navigate("history") },
-                onRequestContactsPermission = onRequestPermissions
+                onRequestContactsPermission = onRequestPermissions,
+                onRequestAudioPermission = onRequestAudioPermission
             )
         }
 

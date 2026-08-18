@@ -100,17 +100,17 @@ class ContactResolver(
 
         // If top match has high confidence
         if (bestMatch.matchConfidence >= 0.60f) {
-            Logger.d("Fuzzy resolved contact '$trimmedQuery' -> '${bestMatch.displayName}' (score: ${bestMatch.matchConfidence})")
-            cacheContact(lookupKey, bestMatch)
-
             if (scoredCandidates.size > 1 && (scoredCandidates[0].matchConfidence - scoredCandidates[1].matchConfidence) < 0.15f) {
-                // Ambiguous close matches
+                // Ambiguous close matches — do NOT cache assumption
+                Logger.d("Ambiguous contact matches for '$trimmedQuery' between '${scoredCandidates[0].displayName}' and '${scoredCandidates[1].displayName}'")
                 return@withContext ContactResolutionResult.Ambiguous(
                     bestMatch = bestMatch,
                     candidates = scoredCandidates.take(4)
                 )
             }
 
+            Logger.d("Fuzzy resolved contact '$trimmedQuery' -> '${bestMatch.displayName}' (score: ${bestMatch.matchConfidence})")
+            cacheContact(lookupKey, bestMatch)
             return@withContext ContactResolutionResult.Found(bestMatch)
         }
 

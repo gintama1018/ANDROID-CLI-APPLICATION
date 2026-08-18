@@ -1,5 +1,10 @@
 package com.gintama.nlcli.ui.components
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -17,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -24,9 +30,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -36,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import com.gintama.nlcli.ui.theme.PromptColor
 import com.gintama.nlcli.ui.theme.TerminalBorder
 import com.gintama.nlcli.ui.theme.TerminalGreen
+import com.gintama.nlcli.ui.theme.TerminalRed
 import com.gintama.nlcli.ui.theme.TerminalSurface
 import com.gintama.nlcli.ui.theme.TextBright
 import com.gintama.nlcli.ui.theme.TextSubtle
@@ -48,15 +57,32 @@ fun TerminalInputBar(
     onHistoryUp: () -> Unit,
     onHistoryDown: () -> Unit,
     isExecuting: Boolean,
+    isListening: Boolean = false,
+    onVoiceClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val infiniteTransition = rememberInfiniteTransition(label = "micPulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = if (isListening) 1.25f else 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(600),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseScale"
+    )
+
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 8.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(TerminalSurface)
-            .border(1.dp, TerminalBorder, RoundedCornerShape(8.dp))
+            .border(
+                1.dp,
+                if (isListening) TerminalRed else TerminalBorder,
+                RoundedCornerShape(8.dp)
+            )
             .padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -64,7 +90,7 @@ fun TerminalInputBar(
         Text(
             text = ">",
             style = MaterialTheme.typography.titleMedium.copy(
-                color = PromptColor,
+                color = if (isListening) TerminalRed else PromptColor,
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 18.sp
@@ -92,9 +118,9 @@ fun TerminalInputBar(
                 Box {
                     if (value.isEmpty()) {
                         Text(
-                            text = "type a command...",
+                            text = if (isListening) "Listening... speak now" else "type or tap mic...",
                             style = MaterialTheme.typography.bodyLarge.copy(
-                                color = TextSubtle,
+                                color = if (isListening) TerminalRed else TextSubtle,
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 14.sp
                             )
@@ -104,6 +130,23 @@ fun TerminalInputBar(
                 }
             }
         )
+
+        // Voice Input (Push-To-Talk) Button
+        IconButton(
+            onClick = onVoiceClick,
+            modifier = Modifier
+                .size(32.dp)
+                .scale(if (isListening) pulseScale else 1f)
+                .clip(RoundedCornerShape(4.dp))
+                .background(if (isListening) TerminalRed.copy(alpha = 0.25f) else TerminalSurface)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Mic,
+                contentDescription = if (isListening) "Stop Listening" else "Push to Talk",
+                tint = if (isListening) TerminalRed else TerminalGreen,
+                modifier = Modifier.size(18.dp)
+            )
+        }
 
         // History Navigation Buttons
         IconButton(

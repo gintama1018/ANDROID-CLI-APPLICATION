@@ -114,9 +114,10 @@ class CommandDispatcher(
             )
         }
 
-        // 3. Persistence Phase (Room DB)
+        // 3. Persistence Phase (Room DB) - Mask sensitive payload in rawInput and payload columns
+        val safeRawInput = Logger.maskCommandInput(command.rawInput, command.payload)
         saveHistory(
-            rawInput = command.rawInput,
+            rawInput = safeRawInput,
             app = command.app.rawValue,
             action = command.action.rawValue,
             contact = command.contact,

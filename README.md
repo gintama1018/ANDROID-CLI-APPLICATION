@@ -6,6 +6,7 @@
   <img src="https://img.shields.io/badge/UI-Jetpack_Compose-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white" />
   <img src="https://img.shields.io/badge/Database-Room_2.6-FF6F00?style=for-the-badge&logo=sqlite&logoColor=white" />
   <img src="https://img.shields.io/badge/Status-100%25_Offline-00FF66?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/Voice-Push--To--Talk-38BDF8?style=for-the-badge" />
   <img src="https://img.shields.io/badge/Author-GINTAMA-black?style=for-the-badge" />
 </p>
 
@@ -16,7 +17,7 @@
 2. [Key Capabilities](#-key-capabilities)
 3. [System Architecture](#-system-architecture)
    - [Command Dispatch Pipeline](#command-dispatch-pipeline)
-   - [WhatsApp Accessibility Automation State Machine](#whatsapp-accessibility-automation-state-machine)
+   - [WhatsApp Gesture Automation State Machine](#whatsapp-gesture-automation-state-machine)
    - [Contact Fuzzy Resolution Engine](#contact-fuzzy-resolution-engine)
 4. [Package & Module Structure](#-package--module-structure)
 5. [Command Syntax & Cheat-Sheet](#-command-syntax--cheat-sheet)
@@ -31,24 +32,25 @@
 
 ## 🎯 Executive Summary
 
-**NLCLI** is a native Android application engineered to provide a single, ultra-fast, terminal-style command bar where typing natural language instructions (such as *"send whatsapp to Rahul: reaching in 10 mins"*) executes them directly on the device with **zero cloud/internet dependencies**.
+**NLCLI** is a native Android application engineered to provide a single, ultra-fast, terminal-style command bar where typing or speaking natural language instructions (such as *"send whatsapp to Rahul: reaching in 10 mins"*) executes them directly on the device with **zero cloud/internet dependencies**.
 
-### Why Native Android + AccessibilityService?
+### Why Native Android + AccessibilityService + Gesture Taps?
 1. **Sandboxing Limitations in CLI Tools (Termux)**: A traditional Linux CLI shell on Android cannot interact with third-party app UI hierarchies due to OS sandboxing.
 2. **WhatsApp API Restrictions**: WhatsApp has no public intent for background message dispatching without user interaction.
-3. **The Solution**: **NLCLI** generates targeted `wa.me` intents to prefill the chat window and coordinates with an Android `AccessibilityService` background daemon to detect the Send button and simulate the tap automatically.
+3. **The Solution**: **NLCLI** generates targeted `wa.me` intents to prefill the chat window, coordinates with an Android `AccessibilityService` to inspect the UI tree (BFS), handles intermediary *"Continue to chat"* screens, and dispatches synthetic physical touch gestures (`dispatchGesture`) on the exact center coordinates of the Send button to bypass raw-touch event handlers.
 
 ---
 
 ## ✨ Key Capabilities
 
 - **⚡ Sub-Millisecond (<5ms) Parsing**: Deterministic compiled regex parser with fallback to structured JSON intent validation.
-- **💬 100% Hands-Free WhatsApp Sending**: Automated chat loading, view hierarchy inspection (BFS), and send action dispatch.
+- **🎙️ Offline Push-To-Talk Voice Input**: Built-in on-device speech recognition via Android `SpeechRecognizer` (`EXTRA_PREFER_OFFLINE=true`) with animated mic toggle.
+- **💬 100% Hands-Free WhatsApp Sending**: Automated chat loading, view hierarchy inspection (BFS), intermediary screen handling, and synthetic coordinate-based touch injection.
 - **📞 Instant Phone Calling**: Background direct dialing via `Intent.ACTION_CALL` or dialer fallback.
 - **✉️ Direct SMS Messaging**: Direct background SMS dispatch via `SmsManager`.
 - **🚀 Fuzzy App Launcher**: Fuzzy matching and package alias resolution (e.g. `open yt` &rarr; YouTube).
-- **🧠 Levenshtein Fuzzy Contact Matching**: Resolves partial names and typos against `ContactsContract` and caches resolved numbers in Room DB.
-- **🛡️ Dry-Run Simulation**: Test and preview how commands will be executed without triggering any device action.
+- **🧠 Levenshtein Fuzzy Contact Matching**: Resolves partial names and typos against `ContactsContract` with ambiguity protection and local Room DB caching.
+- **🛡️ Privacy by Default**: Message payloads masked in local database (`****`) and Android Cloud Auto-Backup disabled (`android:allowBackup="false"`).
 - **📜 Local Room Command History**: Searchable, persistent log with status filters (Success / Failed) and 1-tap re-execution.
 
 ---
@@ -59,7 +61,8 @@
 
 ```mermaid
 flowchart TD
-    A[User Types Natural Language Command] --> B[CliViewModel]
+    A1[User Types Command in Terminal] --> B[CliViewModel]
+    A2[User Speaks via Push-To-Talk Mic] -->|Offline SpeechRecognizer| B
     B --> C[CommandDispatcher]
     C --> D{RegexParser<br/>Deterministic Fast Path}
     
@@ -81,13 +84,16 @@ flowchart TD
     N --> O[Register Pending Send in Accessibility Service]
     O --> P[Launch wa.me Intent Package: com.whatsapp]
     P --> Q[NLCliAccessibilityService<br/>NodeFinder BFS Tree Walk]
-    Q --> R[Click Send Button Node]
+    Q --> R1{Intermediary Screen?}
+    R1 -- 'Continue to chat' Found --> R2[Gesture Tap Continue & Wait 600ms]
+    R2 --> Q
+    R1 -- Send Button Found --> R3[Calculate Node Center Bounds & dispatchGesture Tap]
     
     J --> S[Direct SmsManager / Intent]
     K --> T[ACTION_CALL Intent]
     L --> U[PackageManager Launch Intent]
     
-    R --> V[Save to Room DB History]
+    R3 --> V[Mask Payloads & Save to Room DB]
     S --> V
     T --> V
     U --> V
@@ -97,25 +103,28 @@ flowchart TD
 
 ---
 
-### WhatsApp Accessibility Automation State Machine
+### WhatsApp Gesture Automation State Machine
 
 ```mermaid
 stateDiagram-v2
     [*] --> Idle: Service Running
-    Idle --> PendingSend: WhatsAppExecutor registers send request (contact + timeout 4s)
+    Idle --> PendingSend: WhatsAppExecutor registers send request (contact + timeout 15s)
     PendingSend --> WhatsAppLaunched: Intent starts com.whatsapp
     WhatsAppLaunched --> PollingTree: WindowStateChanged / WindowContentChanged
     
     state PollingTree {
         [*] --> SearchNode
-        SearchNode --> CheckViewId: By ID 'com.whatsapp:id/send'
-        CheckViewId --> CheckContentDesc: By localized 'Send' / 'भेजें'
-        CheckContentDesc --> CheckText: By Button Text
-        CheckText --> SearchNode: Retry every 300ms
+        SearchNode --> CheckIntermediary: Check 'Continue to chat'
+        CheckIntermediary --> TapContinue: Found -> dispatchGesture tap & delay(600ms)
+        TapContinue --> SearchNode
+        
+        SearchNode --> CheckSendButton: Check ID 'com.whatsapp:id/send' or Localized Text
+        CheckSendButton --> GetNodeBounds: Found -> compute center (x, y)
+        GetNodeBounds --> DispatchPhysicalTap: dispatchGesture(StrokeDescription) + performClick fallback
     }
     
-    PollingTree --> SendClicked: Node Found -> performAction(ACTION_CLICK)
-    PollingTree --> TimeoutFailed: >4000ms Elapsed -> Dump Hierarchy
+    PollingTree --> SendClicked: Physical Tap Dispatched (Attempt <= 15s)
+    PollingTree --> TimeoutFailed: >15000ms Elapsed -> Dump Hierarchy
     
     SendClicked --> NotifyUI: Broadcast Success -> Emit StateFlow
     TimeoutFailed --> NotifyUI: Broadcast Failure -> Prompt Manual Tap
@@ -144,8 +153,10 @@ flowchart LR
     I -- No --> K[Calculate Levenshtein Similarity Score]
     
     K --> L{Score >= 0.60?}
-    L -- Yes --> M[Pick Best Match & Cache]
-    L -- No --> N[Return Not Found]
+    L -- Yes --> M{Ambiguous Match Score Delta < 0.15?}
+    M -- Ambiguous --> N[Return Candidates & DO NOT Cache Assumption]
+    M -- Confident --> O[Save to Cache & Return Best Match]
+    L -- No --> P[Return Not Found]
 ```
 
 ---
@@ -155,10 +166,10 @@ flowchart LR
 ```
 com.gintama.nlcli
 ├── 📂 accessibility/
-│   ├── NLCliAccessibilityService.kt   # Background accessibility service (WhatsApp clicker)
-│   └── NodeFinder.kt                  # BFS tree walker matching view-IDs & localized descriptions
+│   ├── NLCliAccessibilityService.kt   # Background accessibility service with dispatchGesture physical tap
+│   └── NodeFinder.kt                  # BFS tree walker matching view-IDs, localized descriptions & bounds
 ├── 📂 contacts/
-│   ├── ContactResolver.kt             # ContactsContract lookup + Levenshtein fuzzy matcher
+│   ├── ContactResolver.kt             # ContactsContract lookup + Levenshtein fuzzy matcher + clean caching
 │   ├── PhoneNormalizer.kt             # E.164 normalization (+91 defaults) & wa.me URL formatter
 │   └── ResolvedContact.kt             # Contact data model
 ├── 📂 data/
@@ -170,7 +181,7 @@ com.gintama.nlcli
 │       ├── CommandHistoryEntity.kt    # History table entity
 │       └── ContactCacheEntity.kt      # Contact cache entity
 ├── 📂 dispatcher/
-│   └── CommandDispatcher.kt           # Central orchestrator (parse -> resolve -> execute -> persist)
+│   └── CommandDispatcher.kt           # Central orchestrator (parse -> resolve -> execute -> masked persist)
 ├── 📂 executor/
 │   ├── ICommandExecutor.kt            # Base executor interface
 │   ├── WhatsAppExecutor.kt            # WhatsApp wa.me intent launcher & accessibility hook
@@ -188,24 +199,26 @@ com.gintama.nlcli
 │   ├── RegexParser.kt                 # Fast-path deterministic regex parsing engine
 │   └── LlmParser.kt                   # Schema-validated intent parser & fallback
 ├── 📂 ui/
-│   ├── CommandBarScreen.kt            # Main terminal UI screen
+│   ├── CommandBarScreen.kt            # Main terminal UI screen with voice mic toggle
 │   ├── HistoryScreen.kt               # Searchable command history screen
 │   ├── components/
-│   │   ├── PermissionBanner.kt        # Amber accessibility & contact permission banner
+│   │   ├── PermissionBanner.kt        # Amber accessibility, contact, and audio permission banner
 │   │   ├── QuickActionChips.kt        # Quick action template buttons
-│   │   ├── TerminalInputBar.kt        # Monospace input prompt (`>`) with history up/down
+│   │   ├── TerminalInputBar.kt        # Monospace input prompt (`>`) with Mic & history up/down
 │   │   └── TerminalOutputView.kt      # Monospace log stream with syntax-highlighted badges
 │   ├── theme/
 │   │   ├── Color.kt                   # Dark theme palette (#0A0E14, #00FF66, #38BDF8)
 │   │   ├── Theme.kt                   # Compose Material3 Theme definition
 │   │   └── Type.kt                    # Monospace typography styles
 │   └── viewmodel/
-│       ├── CliViewModel.kt            # Main CLI UI State & command dispatch handler
+│       ├── CliViewModel.kt            # Main CLI UI State, VoiceManager observer & command dispatcher
 │       └── HistoryViewModel.kt        # History filter & search StateFlows
 ├── 📂 util/
-│   ├── Logger.kt                      # Privacy-preserving disciplined logger (masks payloads)
-│   └── PermissionHelper.kt            # Accessibility & runtime permission helper
-├── MainActivity.kt                    # Single Activity container with Compose Navigation
+│   ├── Logger.kt                      # Privacy-preserving disciplined logger with payload masking
+│   └── PermissionHelper.kt            # Accessibility, Audio & runtime permission helpers
+├── 📂 voice/
+│   └── VoiceInputManager.kt           # Offline push-to-talk speech recognition manager
+├── MainActivity.kt                    # Single Activity container with Compose Navigation & permissions
 └── NlCliApplication.kt                # Application entry point & Room eager init
 ```
 
@@ -215,6 +228,7 @@ com.gintama.nlcli
 
 | Category | Example Command | Description |
 |---|---|---|
+| **Voice Command** | Tap 🎙️ &rarr; *"Send whatsapp to Rahul: reaching in 10 mins"* | Auto-transcribes speech and executes command hands-free |
 | **WhatsApp** | `send whatsapp to Rahul: reaching in 10 mins` | Resolves contact number, opens chat, auto-clicks Send |
 | **WhatsApp (Short)** | `whatsapp Mom: reached home safely` | Short format with auto-send |
 | **WhatsApp (Direct)** | `wa 9876543210 - I will call you later` | Direct phone number format |
@@ -228,12 +242,13 @@ com.gintama.nlcli
 
 ---
 
-## 🛡️ Security, Privacy & Permission Model
+## 🛡️ Security, Privacy & Data Hygiene
 
-1. **Disciplined Privacy**: By default, full message bodies are sanitized/masked in the database and system logs (`****`).
-2. **Tight Accessibility Scope**: The `accessibility_service_config.xml` is strictly scoped to `com.whatsapp` and `com.whatsapp.w4b` — it never listens to or intercepts any other application.
-3. **100% Offline Guarantee**: No network requests (`android.permission.INTERNET` is **NOT** even required or requested in `AndroidManifest.xml`).
-4. **Explicit Consent**: The user must explicitly enable the Accessibility Service under Android Settings.
+1. **Masked Payloads in Database**: Both `rawInput` and `sanitizedPayload` columns in `CommandHistoryEntity` mask message text (`****`) by default so plaintext bodies are never readable from disk.
+2. **Auto Backup Disabled**: `android:allowBackup="false"` is set in `AndroidManifest.xml` to prevent Android from backing up local database files to cloud backups.
+3. **No Ambiguity Cache Poisoning**: `ContactResolver` guarantees that ambiguous match guesses are never cached automatically without confirmation.
+4. **Tight Accessibility Scope**: The `accessibility_service_config.xml` is strictly scoped to `com.whatsapp` and `com.whatsapp.w4b` — it never inspects any other application.
+5. **100% Offline Guarantee**: Zero external network or telemetry permissions (`android.permission.INTERNET` is **NOT** declared).
 
 ---
 
@@ -254,7 +269,7 @@ For hands-free WhatsApp message dispatching:
 2. Tap the **ENABLE** button on the amber banner.
 3. In Android **Settings > Accessibility > Downloaded Apps**, select **NLCLI Automation Service**.
 4. Toggle it **ON** and confirm **Allow**.
-5. Grant Contacts permission when prompted.
+5. Grant Contacts and Audio permissions when prompted.
 
 ---
 

@@ -1,12 +1,15 @@
 package com.gintama.nlcli.accessibility
 
 import android.accessibilityservice.AccessibilityService
-import android.content.Intent
+import android.accessibilityservice.GestureDescription
+import android.graphics.Path
+import android.graphics.Point
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.gintama.nlcli.model.ExecutionResult
 import com.gintama.nlcli.util.Logger
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -17,6 +20,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 class NLCliAccessibilityService : AccessibilityService() {
 
@@ -41,7 +45,7 @@ class NLCliAccessibilityService : AccessibilityService() {
         // If an automated send request is active and pending execution
         val activeRequest = pendingRequest
         if (activeRequest != null && activeRequest.isPending) {
-            Logger.d("WhatsApp event detected: ${event.eventType}. Processing pending send request...")
+            Logger.d("WhatsApp event detected: ${event.eventType}. Initiating automation pipeline...")
             triggerSendAutomation(activeRequest)
         }
     }
@@ -67,33 +71,62 @@ class NLCliAccessibilityService : AccessibilityService() {
 
         automationJob = serviceScope.launch {
             request.isPending = false
-            Logger.d("Starting send button search for request ID: ${request.id}")
+            Logger.d("Starting robust auto-send search for request ID: ${request.id}")
 
             val startTime = SystemClock.uptimeMillis()
-            val timeoutMs = 4000L
+            val timeoutMs = 15000L // 15s budget for screen render and intermediary steps
             val pollIntervalMs = 300L
-            var clicked = false
             var attempts = 0
+            var intermediateTapped = false
 
             while (SystemClock.uptimeMillis() - startTime < timeoutMs) {
                 attempts++
                 val rootNode = rootInActiveWindow
 
                 if (rootNode != null) {
+                    // Step 1: Check for the primary Send button
                     val sendNode = NodeFinder.findSendButton(rootNode)
                     if (sendNode != null) {
-                        // Attempt click on node or nearest clickable parent
-                        clicked = performClick(sendNode)
-                        if (clicked) {
-                            Logger.i("Successfully clicked WhatsApp send button after $attempts attempts (${SystemClock.uptimeMillis() - startTime}ms)")
-                            val result = ExecutionResult(
-                                success = true,
-                                message = "WhatsApp message sent to ${request.contactName} hands-free",
-                                details = "Clicked send button after $attempts polling cycles"
-                            )
-                            _automationResults.emit(result)
-                            pendingRequest = null
-                            return@launch
+                        val coords = NodeFinder.getNodeCenterCoordinates(sendNode)
+                        Logger.d("Send button detected (bounds center: $coords). Executing physical tap...")
+
+                        // Primary click: Coordinate-based synthetic gesture tap
+                        var tapSuccess = false
+                        if (coords != null) {
+                            tapSuccess = dispatchTapGesture(coords.x.toFloat(), coords.y.toFloat())
+                        }
+
+                        // Fallback/parallel click: standard accessibility action click
+                        val actionSuccess = performClickAction(sendNode)
+
+                        Logger.i("Executed click on Send button (gestureTap=$tapSuccess, actionClick=$actionSuccess) after $attempts polling cycles (${SystemClock.uptimeMillis() - startTime}ms)")
+
+                        val result = ExecutionResult(
+                            success = true,
+                            message = "WhatsApp message sent to ${request.contactName} hands-free",
+                            details = "Auto-clicked Send button (attempt $attempts, ${SystemClock.uptimeMillis() - startTime}ms)"
+                        )
+                        _automationResults.emit(result)
+                        pendingRequest = null
+                        return@launch
+                    }
+
+                    // Step 2: If Send button not yet visible, check for intermediary "Continue to chat"
+                    if (!intermediateTapped) {
+                        val continueNode = NodeFinder.findContinueToChatButton(rootNode)
+                        if (continueNode != null) {
+                            val continueCoords = NodeFinder.getNodeCenterCoordinates(continueNode)
+                            Logger.d("Intermediary 'Continue to chat' screen detected. Tapping at $continueCoords...")
+
+                            if (continueCoords != null) {
+                                dispatchTapGesture(continueCoords.x.toFloat(), continueCoords.y.toFloat())
+                            }
+                            performClickAction(continueNode)
+                            intermediateTapped = true
+
+                            // Give WhatsApp 600ms to transition into the chat thread
+                            delay(600L)
+                            continue
                         }
                     }
                 }
@@ -101,21 +134,58 @@ class NLCliAccessibilityService : AccessibilityService() {
                 delay(pollIntervalMs)
             }
 
-            // If we reached here, send button was not found within timeout
+            // Timeout exceeded
             val rootDump = NodeFinder.dumpHierarchy(rootInActiveWindow, maxDepth = 3)
             Logger.w("Could not find WhatsApp send button within ${timeoutMs}ms. Node dump:\n$rootDump")
 
             val failureResult = ExecutionResult(
                 success = false,
-                message = "WhatsApp opened, but could not automatically tap Send (UI may have changed).",
-                details = "Timeout after ${timeoutMs}ms ($attempts attempts). Please tap Send manually."
+                message = "WhatsApp opened, but could not automatically tap Send.",
+                details = "Timeout after ${timeoutMs / 1000}s. Please tap Send manually. Check logs for hierarchy dump."
             )
             _automationResults.emit(failureResult)
             pendingRequest = null
         }
     }
 
-    private fun performClick(node: AccessibilityNodeInfo): Boolean {
+    /**
+     * Dispatches a synthetic touch gesture at specified screen coordinates.
+     * This bypasses WhatsApp's raw touch event handlers that ignore standard ACTION_CLICK.
+     */
+    private suspend fun dispatchTapGesture(x: Float, y: Float): Boolean {
+        val path = Path().apply {
+            moveTo(x, y)
+        }
+        val stroke = GestureDescription.StrokeDescription(path, 0, 60)
+        val gesture = GestureDescription.Builder().addStroke(stroke).build()
+
+        val deferred = CompletableDeferred<Boolean>()
+
+        val dispatched = dispatchGesture(
+            gesture,
+            object : GestureResultCallback() {
+                override fun onCompleted(gestureDescription: GestureDescription?) {
+                    Logger.d("Gesture tap completed successfully at ($x, $y)")
+                    deferred.complete(true)
+                }
+
+                override fun onCancelled(gestureDescription: GestureDescription?) {
+                    Logger.w("Gesture tap cancelled at ($x, $y)")
+                    deferred.complete(false)
+                }
+            },
+            null
+        )
+
+        if (!dispatched) {
+            Logger.w("dispatchGesture returned false immediately")
+            return false
+        }
+
+        return withTimeoutOrNull(500L) { deferred.await() } ?: false
+    }
+
+    private fun performClickAction(node: AccessibilityNodeInfo): Boolean {
         var target: AccessibilityNodeInfo? = node
         while (target != null) {
             if (target.isClickable) {
@@ -124,7 +194,6 @@ class NLCliAccessibilityService : AccessibilityService() {
             }
             target = target.parent
         }
-        // Fallback: try click action directly even if not marked clickable
         return node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
     }
 
