@@ -1,9 +1,12 @@
 package com.gintama.nlcli.dispatcher
 
 import android.content.Context
+import com.gintama.nlcli.accessibility.NLCliAccessibilityService
 import com.gintama.nlcli.contacts.ContactResolver
 import com.gintama.nlcli.data.AppDatabase
 import com.gintama.nlcli.data.dao.CommandHistoryDao
+import com.gintama.nlcli.data.dao.MacroDao
+import com.gintama.nlcli.data.dao.SnippetDao
 import com.gintama.nlcli.data.entity.CommandHistoryEntity
 import com.gintama.nlcli.executor.AppLauncherExecutor
 import com.gintama.nlcli.executor.CallExecutor
@@ -21,6 +24,7 @@ import com.gintama.nlcli.parser.LlmParser
 import com.gintama.nlcli.parser.RegexParser
 import com.gintama.nlcli.util.Logger
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 class CommandDispatcher(
@@ -31,6 +35,8 @@ class CommandDispatcher(
 ) {
 
     private val historyDao: CommandHistoryDao = database.commandHistoryDao()
+    private val snippetDao: SnippetDao = database.snippetDao()
+    private val macroDao: MacroDao = database.macroDao()
     private val contactResolver: ContactResolver = ContactResolver(context, database.contactCacheDao())
 
     private val whatsAppExecutor: ICommandExecutor = WhatsAppExecutor(context, contactResolver)
@@ -41,9 +47,11 @@ class CommandDispatcher(
 
     /**
      * Executes a raw user command string through the complete pipeline:
-     * 1. Parse (Regex fast-path -> LLM fallback)
-     * 2. Dispatch to matching executor
-     * 3. Record execution result in Room database
+     * 1. Macro & Snippet pre-processing
+     * 2. Inline chaining split (`;`)
+     * 3. Parse (Regex fast-path -> LLM fallback)
+     * 4. Dispatch to matching executor
+     * 5. Record execution result in Room database
      */
     suspend fun dispatch(rawInput: String): ExecutionResult = withContext(Dispatchers.IO) {
         val trimmed = rawInput.trim()
@@ -52,6 +60,66 @@ class CommandDispatcher(
                 success = false,
                 message = "No command entered. Type 'help' for instructions."
             )
+        }
+
+        // 1. Macro Expansion (e.g. `gm` -> `torch off; volume 100; open spotify`)
+        val macroExpanded = expandMacro(trimmed)
+
+        // 2. Snippet Substitution (e.g. `wa Rahul: pay {upi}` -> `wa Rahul: pay user@bank`)
+        val snippetExpanded = substituteSnippets(macroExpanded)
+
+        // 3. Inline Chaining (split on unescaped `;`)
+        val segments = splitChainedCommands(snippetExpanded)
+        if (segments.size > 1) {
+            return@withContext executeChainedPipeline(segments)
+        }
+
+        // Single command dispatch
+        executeSingleCommand(segments.firstOrNull() ?: trimmed)
+    }
+
+    private suspend fun executeChainedPipeline(commands: List<String>): ExecutionResult {
+        val results = mutableListOf<ExecutionResult>()
+        var overallSuccess = true
+
+        for ((index, cmdText) in commands.withIndex()) {
+            // If previous command triggered a WhatsApp automation send, wait briefly for UI transition
+            if (NLCliAccessibilityService.isAutomationBusy) {
+                var waitCount = 0
+                while (NLCliAccessibilityService.isAutomationBusy && waitCount < 30) {
+                    delay(200L)
+                    waitCount++
+                }
+            }
+
+            val result = executeSingleCommand(cmdText)
+            results.add(result)
+            if (!result.success) {
+                overallSuccess = false
+            }
+
+            // Small pace delay between chained actions
+            if (index < commands.size - 1) {
+                delay(300L)
+            }
+        }
+
+        val aggregatedMessage = results.mapIndexed { idx, res ->
+            val icon = if (res.success) "✔" else "✘"
+            "$icon [${idx + 1}/${results.size}] ${res.message}"
+        }.joinToString("\n")
+
+        return ExecutionResult(
+            success = overallSuccess,
+            message = aggregatedMessage,
+            details = "Executed ${commands.size} chained commands sequentially"
+        )
+    }
+
+    private suspend fun executeSingleCommand(input: String): ExecutionResult {
+        val trimmed = input.trim()
+        if (trimmed.isBlank()) {
+            return ExecutionResult(false, "Empty command segment")
         }
 
         // 1. Parsing Phase
@@ -69,7 +137,7 @@ class CommandDispatcher(
                     details = parseResult.candidates.joinToString("\n") { "• ${it.rawInput}" }
                 )
                 saveHistory(trimmed, "unknown", "unknown", null, null, false, failureResult.message, "PARSER")
-                return@withContext failureResult
+                return failureResult
             }
             is ParserResult.Failure -> {
                 val failureResult = ExecutionResult(
@@ -78,7 +146,7 @@ class CommandDispatcher(
                     details = parseResult.suggestion
                 )
                 saveHistory(trimmed, "unknown", "unknown", null, null, false, failureResult.message, "PARSER")
-                return@withContext failureResult
+                return failureResult
             }
         }
 
@@ -114,7 +182,7 @@ class CommandDispatcher(
             )
         }
 
-        // 3. Persistence Phase (Room DB) - Mask sensitive payload in rawInput and payload columns
+        // 3. Persistence Phase (Room DB) - Mask sensitive payload
         val safeRawInput = Logger.maskCommandInput(command.rawInput, command.payload)
         saveHistory(
             rawInput = safeRawInput,
@@ -127,7 +195,45 @@ class CommandDispatcher(
             source = command.source.name
         )
 
-        executionResult
+        return executionResult
+    }
+
+    private suspend fun expandMacro(input: String): String {
+        val trimmed = input.trim()
+        if (trimmed.contains("=") || trimmed.startsWith("alias", ignoreCase = true)) {
+            return input
+        }
+        val macro = macroDao.getMacro(trimmed)
+        if (macro != null && macro.commandSequence.isNotBlank()) {
+            Logger.d("Expanded alias '$trimmed' ➔ '${macro.commandSequence}'")
+            return macro.commandSequence
+        }
+        return input
+    }
+
+    private suspend fun substituteSnippets(input: String): String {
+        if (!input.contains("{") || !input.contains("}")) {
+            return input
+        }
+        var result = input
+        val snippets = snippetDao.getAllSnippets()
+        for (snippet in snippets) {
+            val token = "{${snippet.name}}"
+            if (result.contains(token, ignoreCase = true)) {
+                result = result.replace(token, snippet.value, ignoreCase = true)
+            }
+        }
+        return result
+    }
+
+    private fun splitChainedCommands(input: String): List<String> {
+        // Do not split if this is a macro or snippet definition assignment
+        if (input.startsWith("alias", ignoreCase = true) && input.contains("=")) {
+            return listOf(input)
+        }
+        return input.split(";")
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
     }
 
     private suspend fun saveHistory(

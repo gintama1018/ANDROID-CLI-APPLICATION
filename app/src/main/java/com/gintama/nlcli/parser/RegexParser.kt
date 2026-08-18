@@ -50,6 +50,274 @@ class RegexParser : CommandParser {
             isDryRun = true
         ),
 
+        // 2.1 Torch / Flashlight
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*(?:torch|flashlight)\\s+(?:on|enable|1)$"),
+            app = AppType.SYSTEM,
+            action = ActionType.TORCH,
+            payloadGroup = null
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*(?:torch|flashlight)\\s+(?:off|disable|0)$"),
+            app = AppType.SYSTEM,
+            action = ActionType.TORCH,
+            payloadGroup = null
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*(?:toggle\\s+(?:torch|flashlight)|torch|flashlight)\\s*$"),
+            app = AppType.SYSTEM,
+            action = ActionType.TORCH,
+            payloadGroup = null
+        ),
+
+        // 2.2 Volume & Sound Profile
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*(?:volume|vol)\\s+(?<val>\\d{1,3})%?\\s*$"),
+            app = AppType.SYSTEM,
+            action = ActionType.VOLUME,
+            payloadGroup = "val"
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*(?:max\\s+volume|volume\\s+max)\\s*$"),
+            app = AppType.SYSTEM,
+            action = ActionType.VOLUME
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*(?:volume|vol)\\s+(?:up|\\+)\\s*$"),
+            app = AppType.SYSTEM,
+            action = ActionType.VOLUME
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*(?:volume|vol)\\s+(?:down|\\-)\\s*$"),
+            app = AppType.SYSTEM,
+            action = ActionType.VOLUME
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*(?:mute|silence)\\s*$"),
+            app = AppType.SYSTEM,
+            action = ActionType.VOLUME
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*(?:silent\\s+mode|silent)\\s*$"),
+            app = AppType.SYSTEM,
+            action = ActionType.VOLUME
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*(?:vibrate\\s+mode|vibrate)\\s*$"),
+            app = AppType.SYSTEM,
+            action = ActionType.VOLUME
+        ),
+
+        // 2.3 Diagnostics
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*battery\\s*$"),
+            app = AppType.SYSTEM,
+            action = ActionType.BATTERY
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*storage\\s*$"),
+            app = AppType.SYSTEM,
+            action = ActionType.STORAGE
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*(?:device\\s+info|deviceinfo)\\s*$"),
+            app = AppType.SYSTEM,
+            action = ActionType.DEVICE_INFO
+        ),
+
+        // 2.4 Math Evaluator: "calc 2^10 + 50" or "calculate (450 * 18) / 100"
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*(?:calc|calculate|eval)\\s+(?<expr>.+)$"),
+            app = AppType.UTILITY,
+            action = ActionType.CALC,
+            payloadGroup = "expr"
+        ),
+
+        // 2.5 Unit Converter: "convert 5 miles to km" / "convert 100 f to c"
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*convert\\s+(?<val>[\\d\\.]+)\\s+(?<from>[a-zA-Z/°]+)\\s+(?:to|in)\\s+(?<to>[a-zA-Z/°]+)\\s*$"),
+            app = AppType.UTILITY,
+            action = ActionType.CONVERT,
+            contactGroup = "from",
+            payloadGroup = "to"
+        ),
+
+        // 2.6 Notes & Todos
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*note\\s+delete\\s+(?<id>\\d+)\\s*$"),
+            app = AppType.NOTES,
+            action = ActionType.NOTE,
+            payloadGroup = "id"
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*notes\\s+clear\\s*$"),
+            app = AppType.NOTES,
+            action = ActionType.NOTE
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*(?:notes\\s+list|notes)\\s*$"),
+            app = AppType.NOTES,
+            action = ActionType.NOTE
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*note\\s+(?<text>.+)$"),
+            app = AppType.NOTES,
+            action = ActionType.NOTE,
+            payloadGroup = "text"
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*todo\\s+done\\s+(?<id>\\d+)\\s*$"),
+            app = AppType.TODOS,
+            action = ActionType.TODO,
+            payloadGroup = "id"
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*todo\\s+delete\\s+(?<id>\\d+)\\s*$"),
+            app = AppType.TODOS,
+            action = ActionType.TODO,
+            payloadGroup = "id"
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*todos\\s+clear\\s*$"),
+            app = AppType.TODOS,
+            action = ActionType.TODO
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*(?:todos\\s+list|todos|todo\\s+list)\\s*$"),
+            app = AppType.TODOS,
+            action = ActionType.TODO
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*todo\\s+(?<task>.+)$"),
+            app = AppType.TODOS,
+            action = ActionType.TODO,
+            payloadGroup = "task"
+        ),
+
+        // 2.7 Dev Tools: uuid, sha256, base64, copy, paste, ip
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*uuid\\s*$"),
+            app = AppType.UTILITY,
+            action = ActionType.DEV_TOOL
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*sha256\\s+(?<text>.+)$"),
+            app = AppType.UTILITY,
+            action = ActionType.DEV_TOOL,
+            payloadGroup = "text"
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*base64\\s+decode\\s+(?<text>.+)$"),
+            app = AppType.UTILITY,
+            action = ActionType.DEV_TOOL,
+            payloadGroup = "text"
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*base64\\s+(?:encode\\s+)?(?<text>.+)$"),
+            app = AppType.UTILITY,
+            action = ActionType.DEV_TOOL,
+            payloadGroup = "text"
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*copy\\s+(?<text>.+)$"),
+            app = AppType.UTILITY,
+            action = ActionType.DEV_TOOL,
+            payloadGroup = "text"
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*paste\\s*$"),
+            app = AppType.UTILITY,
+            action = ActionType.DEV_TOOL
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*(?:ip|local\\s+ip)\\s*$"),
+            app = AppType.UTILITY,
+            action = ActionType.DEV_TOOL
+        ),
+
+        // 3.1 Alarms & Timers
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*(?:show\\s+alarms|alarms)\\s*$"),
+            app = AppType.CLOCK,
+            action = ActionType.ALARM
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*(?:set\\s+)?alarm\\s+(?:for\\s+|at\\s+)?(?<time>\\d{1,2}(?::\\d{2})?\\s*(?:am|pm)?)(?:\\s*[:\\-]?\\s*(?<msg>.+))?$"),
+            app = AppType.CLOCK,
+            action = ActionType.ALARM,
+            contactGroup = "time",
+            payloadGroup = "msg"
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*(?:set\\s+)?timer\\s+(?:for\\s+)?(?<duration>\\d+\\s*(?:m|min|mins|minutes|s|sec|secs|seconds|h|hour|hours)?)(?:\\s*[:\\-]?\\s*(?<msg>.+))?$"),
+            app = AppType.CLOCK,
+            action = ActionType.TIMER,
+            contactGroup = "duration",
+            payloadGroup = "msg"
+        ),
+
+        // 3.3 Media Controls: play, pause, next, prev
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*(?:play\\s+music|play|resume)\\s*$"),
+            app = AppType.MEDIA,
+            action = ActionType.MEDIA
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*(?:pause\\s+music|pause|stop\\s+music)\\s*$"),
+            app = AppType.MEDIA,
+            action = ActionType.MEDIA
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*(?:next\\s+song|next|next\\s+track)\\s*$"),
+            app = AppType.MEDIA,
+            action = ActionType.MEDIA
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*(?:prev\\s+song|previous\\s+song|prev|previous)\\s*$"),
+            app = AppType.MEDIA,
+            action = ActionType.MEDIA
+        ),
+
+        // 3.4 Snippets: snippet upi = you@okhdfc
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*snippets\\s*$"),
+            app = AppType.UTILITY,
+            action = ActionType.SNIPPET
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*snippet\\s+delete\\s+(?<name>[a-zA-Z0-9_]+)\\s*$"),
+            app = AppType.UTILITY,
+            action = ActionType.SNIPPET,
+            payloadGroup = "name"
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*snippet\\s+(?<name>[a-zA-Z0-9_]+)\\s*=\\s*(?<val>.+)$"),
+            app = AppType.UTILITY,
+            action = ActionType.SNIPPET,
+            contactGroup = "name",
+            payloadGroup = "val"
+        ),
+
+        // 3.5 Macros / Aliases: alias gm = torch off; volume 100; open spotify
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*(?:aliases|alias\\s+list)\\s*$"),
+            app = AppType.UTILITY,
+            action = ActionType.MACRO
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*alias\\s+delete\\s+(?<name>[a-zA-Z0-9_]+)\\s*$"),
+            app = AppType.UTILITY,
+            action = ActionType.MACRO,
+            payloadGroup = "name"
+        ),
+        PatternRule(
+            pattern = Pattern.compile("^(?i)\\s*alias\\s+(?<name>[a-zA-Z0-9_]+)\\s*=\\s*(?<seq>.+)$"),
+            app = AppType.UTILITY,
+            action = ActionType.MACRO,
+            contactGroup = "name",
+            payloadGroup = "seq"
+        ),
+
         // WhatsApp: "send whatsapp to <contact>: <message>" or "send wa to <contact> - <message>"
         PatternRule(
             pattern = Pattern.compile("^(?i)\\s*send\\s+(?:whatsapp|wa)\\s+to\\s+(?<contact>[^:\\-]+?)[:\\-]\\s*(?<message>.+)$"),
@@ -58,7 +326,6 @@ class RegexParser : CommandParser {
             contactGroup = "contact",
             payloadGroup = "message"
         ),
-        // WhatsApp: "whatsapp to <contact>: <message>"
         PatternRule(
             pattern = Pattern.compile("^(?i)\\s*(?:whatsapp|wa)\\s+to\\s+(?<contact>[^:\\-]+?)[:\\-]\\s*(?<message>.+)$"),
             app = AppType.WHATSAPP,
@@ -66,7 +333,6 @@ class RegexParser : CommandParser {
             contactGroup = "contact",
             payloadGroup = "message"
         ),
-        // WhatsApp: "whatsapp <contact>: <message>" or "whatsapp <contact> - <message>"
         PatternRule(
             pattern = Pattern.compile("^(?i)\\s*(?:whatsapp|wa)\\s+(?<contact>[^:\\-]+?)[:\\-]\\s*(?<message>.+)$"),
             app = AppType.WHATSAPP,
@@ -74,7 +340,6 @@ class RegexParser : CommandParser {
             contactGroup = "contact",
             payloadGroup = "message"
         ),
-        // WhatsApp: "send <contact> on (whatsapp|wa): <message>"
         PatternRule(
             pattern = Pattern.compile("^(?i)\\s*send\\s+(?<contact>[^:\\-]+?)\\s+on\\s+(?:whatsapp|wa)[:\\-]\\s*(?<message>.+)$"),
             app = AppType.WHATSAPP,
@@ -82,7 +347,6 @@ class RegexParser : CommandParser {
             contactGroup = "contact",
             payloadGroup = "message"
         ),
-        // WhatsApp: "whatsapp <contact> <message>" (space separated without punctuation)
         PatternRule(
             pattern = Pattern.compile("^(?i)\\s*(?:whatsapp|wa)\\s+(?<contact>[a-zA-Z0-9+_]+)\\s+(?<message>.+)$"),
             app = AppType.WHATSAPP,
@@ -99,7 +363,6 @@ class RegexParser : CommandParser {
             contactGroup = "contact",
             payloadGroup = "message"
         ),
-        // SMS: "sms to <contact>: <message>"
         PatternRule(
             pattern = Pattern.compile("^(?i)\\s*sms\\s+to\\s+(?<contact>[^:\\-]+?)[:\\-]\\s*(?<message>.+)$"),
             app = AppType.SMS,
@@ -107,7 +370,6 @@ class RegexParser : CommandParser {
             contactGroup = "contact",
             payloadGroup = "message"
         ),
-        // SMS: "sms <contact>: <message>"
         PatternRule(
             pattern = Pattern.compile("^(?i)\\s*sms\\s+(?<contact>[^:\\-]+?)[:\\-]\\s*(?<message>.+)$"),
             app = AppType.SMS,
@@ -115,7 +377,6 @@ class RegexParser : CommandParser {
             contactGroup = "contact",
             payloadGroup = "message"
         ),
-        // SMS: "sms <contact> <message>" (single word contact)
         PatternRule(
             pattern = Pattern.compile("^(?i)\\s*sms\\s+(?<contact>[a-zA-Z0-9+_]+)\\s+(?<message>.+)$"),
             app = AppType.SMS,
@@ -182,10 +443,19 @@ class RegexParser : CommandParser {
                     }
                 }
 
+                // Custom parsing for unit converter to extract value
+                val finalContact = if (rule.action == ActionType.CONVERT) {
+                    try {
+                        val v = matcher.group("val")
+                        val f = matcher.group("from")
+                        "$v $f"
+                    } catch (_: Exception) { contact }
+                } else contact
+
                 val command = Command(
                     app = rule.app,
                     action = rule.action,
-                    contact = contact,
+                    contact = finalContact,
                     payload = payload,
                     rawInput = trimmed,
                     source = ParseSource.REGEX,
@@ -197,7 +467,7 @@ class RegexParser : CommandParser {
 
         return ParserResult.Failure(
             reason = "Command not recognized",
-            suggestion = "Examples:\n  • send whatsapp to Rahul: reaching in 10 mins\n  • call Mom\n  • send sms to John: hey\n  • open YouTube\n  • help"
+            suggestion = "Type 'help' to see all supported offline commands (Torch, Volume, Notes, Todos, Calc, Alarms, WhatsApp, etc.)"
         )
     }
 }

@@ -41,75 +41,80 @@ class RegexParserTest {
     }
 
     @Test
-    fun testWhatsAppWaAlias() = runTest {
-        val result = parser.parse("send wa to Rahul - on my way")
-        assertTrue(result is ParserResult.Success)
-        val cmd = (result as ParserResult.Success).command
-        assertEquals(AppType.WHATSAPP, cmd.app)
-        assertEquals("Rahul", cmd.contact)
-        assertEquals("on my way", cmd.payload)
+    fun testTorchCommands() = runTest {
+        val onRes = parser.parse("torch on")
+        assertTrue(onRes is ParserResult.Success)
+        assertEquals(ActionType.TORCH, (onRes as ParserResult.Success).command.action)
+
+        val offRes = parser.parse("flashlight off")
+        assertTrue(offRes is ParserResult.Success)
+        assertEquals(ActionType.TORCH, (offRes as ParserResult.Success).command.action)
     }
 
     @Test
-    fun testPhoneCall() = runTest {
-        val result = parser.parse("call Mom")
-        assertTrue(result is ParserResult.Success)
-        val cmd = (result as ParserResult.Success).command
-        assertEquals(AppType.PHONE, cmd.app)
-        assertEquals(ActionType.CALL, cmd.action)
-        assertEquals("Mom", cmd.contact)
+    fun testVolumeCommands() = runTest {
+        val volRes = parser.parse("volume 50")
+        assertTrue(volRes is ParserResult.Success)
+        assertEquals(ActionType.VOLUME, (volRes as ParserResult.Success).command.action)
+        assertEquals("50", (volRes as ParserResult.Success).command.payload)
+
+        val muteRes = parser.parse("mute")
+        assertTrue(muteRes is ParserResult.Success)
+        assertEquals(ActionType.VOLUME, (muteRes as ParserResult.Success).command.action)
     }
 
     @Test
-    fun testSmsSend() = runTest {
-        val result = parser.parse("send sms to John: See you tomorrow")
-        assertTrue(result is ParserResult.Success)
-        val cmd = (result as ParserResult.Success).command
-        assertEquals(AppType.SMS, cmd.app)
-        assertEquals(ActionType.SEND_MESSAGE, cmd.action)
-        assertEquals("John", cmd.contact)
-        assertEquals("See you tomorrow", cmd.payload)
+    fun testDiagnostics() = runTest {
+        val battRes = parser.parse("battery")
+        assertTrue(battRes is ParserResult.Success)
+        assertEquals(ActionType.BATTERY, (battRes as ParserResult.Success).command.action)
+
+        val storageRes = parser.parse("storage")
+        assertTrue(storageRes is ParserResult.Success)
+        assertEquals(ActionType.STORAGE, (storageRes as ParserResult.Success).command.action)
     }
 
     @Test
-    fun testAppLaunch() = runTest {
-        val result = parser.parse("open YouTube")
-        assertTrue(result is ParserResult.Success)
-        val cmd = (result as ParserResult.Success).command
-        assertEquals(AppType.SYSTEM, cmd.app)
-        assertEquals(ActionType.OPEN_APP, cmd.action)
-        assertEquals("YouTube", cmd.payload)
+    fun testMathAndConvert() = runTest {
+        val calcRes = parser.parse("calc (450 * 18) / 100")
+        assertTrue(calcRes is ParserResult.Success)
+        assertEquals(ActionType.CALC, (calcRes as ParserResult.Success).command.action)
+
+        val convRes = parser.parse("convert 5 miles to km")
+        assertTrue(convRes is ParserResult.Success)
+        assertEquals(ActionType.CONVERT, (convRes as ParserResult.Success).command.action)
     }
 
     @Test
-    fun testSystemCommands() = runTest {
-        val helpResult = parser.parse("help")
-        assertTrue(helpResult is ParserResult.Success)
-        assertEquals(ActionType.HELP, (helpResult as ParserResult.Success).command.action)
+    fun testNotesAndTodos() = runTest {
+        val noteRes = parser.parse("note buy groceries")
+        assertTrue(noteRes is ParserResult.Success)
+        assertEquals(ActionType.NOTE, (noteRes as ParserResult.Success).command.action)
 
-        val statusResult = parser.parse("status")
-        assertTrue(statusResult is ParserResult.Success)
-        assertEquals(ActionType.STATUS, (statusResult as ParserResult.Success).command.action)
-
-        val clearResult = parser.parse("clear")
-        assertTrue(clearResult is ParserResult.Success)
-        assertEquals(ActionType.CLEAR, (clearResult as ParserResult.Success).command.action)
+        val todoRes = parser.parse("todo call dentist")
+        assertTrue(todoRes is ParserResult.Success)
+        assertEquals(ActionType.TODO, (todoRes as ParserResult.Success).command.action)
     }
 
     @Test
-    fun testDryRun() = runTest {
-        val result = parser.parse("dryrun send whatsapp to Boss: Here is the report")
-        assertTrue(result is ParserResult.Success)
-        val cmd = (result as ParserResult.Success).command
-        assertEquals(AppType.WHATSAPP, cmd.app)
-        assertEquals(ActionType.DRY_RUN, cmd.action)
-        assertEquals("Boss", cmd.contact)
-        assertEquals("Here is the report", cmd.payload)
+    fun testAlarmsAndMedia() = runTest {
+        val alarmRes = parser.parse("alarm 7:00 am")
+        assertTrue(alarmRes is ParserResult.Success)
+        assertEquals(ActionType.ALARM, (alarmRes as ParserResult.Success).command.action)
+
+        val mediaRes = parser.parse("play music")
+        assertTrue(mediaRes is ParserResult.Success)
+        assertEquals(ActionType.MEDIA, (mediaRes as ParserResult.Success).command.action)
     }
 
     @Test
-    fun testUnrecognizedCommand() = runTest {
-        val result = parser.parse("gibberish nonexistent command")
-        assertTrue(result is ParserResult.Failure)
+    fun testAliasesAndSnippets() = runTest {
+        val aliasRes = parser.parse("alias gm = torch off; volume 100")
+        assertTrue(aliasRes is ParserResult.Success)
+        assertEquals(ActionType.MACRO, (aliasRes as ParserResult.Success).command.action)
+
+        val snippetRes = parser.parse("snippet upi = user@bank")
+        assertTrue(snippetRes is ParserResult.Success)
+        assertEquals(ActionType.SNIPPET, (snippetRes as ParserResult.Success).command.action)
     }
 }

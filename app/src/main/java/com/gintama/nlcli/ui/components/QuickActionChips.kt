@@ -16,8 +16,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gintama.nlcli.ui.theme.TerminalBorder
-import com.gintama.nlcli.ui.theme.TerminalCyan
-import com.gintama.nlcli.ui.theme.TerminalGreen
 import com.gintama.nlcli.ui.theme.TerminalSurface
 import com.gintama.nlcli.ui.theme.TextBright
 
@@ -25,10 +23,17 @@ data class QuickAction(val label: String, val template: String)
 
 val DefaultQuickActions = listOf(
     QuickAction("💬 WhatsApp", "send whatsapp to Rahul: reaching in 10 mins"),
+    QuickAction("🔦 Torch", "torch on"),
+    QuickAction("🔢 Calc", "calc (450 * 18) / 100"),
+    QuickAction("📝 Note", "note buy milk and coffee"),
+    QuickAction("📋 Todos", "todos"),
+    QuickAction("🔋 Battery", "battery"),
+    QuickAction("⏰ Alarm", "alarm 7:00 am"),
+    QuickAction("🎵 Music", "play music"),
+    QuickAction("📏 Convert", "convert 5 miles to km"),
     QuickAction("📞 Call", "call Mom"),
     QuickAction("✉️ SMS", "send sms to Alex: hey"),
     QuickAction("🚀 Open App", "open YouTube"),
-    QuickAction("🧪 Dry Run", "dryrun send whatsapp to Boss: here is the file"),
     QuickAction("⚡ Status", "status"),
     QuickAction("❓ Help", "help"),
     QuickAction("🧹 Clear", "clear")
